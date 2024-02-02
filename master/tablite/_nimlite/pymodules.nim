@@ -13,6 +13,7 @@ var
     iTabliteConfig: nimpy.PyObject
     iMplite: nimpy.PyObject
     iNimlite: nimpy.PyObject
+    iTqdm: nimpy.PyObject
     PyNoneClass*: nimpy.PyObject
 
 proc importPy(): void =
@@ -33,6 +34,7 @@ proc importPy(): void =
     iMplite = nimpy.pyImport("mplite")
     iNumpy = nimpy.pyImport("numpy")
     iNimlite = nimpy.pyImport("tablite.nimlite")
+    iTqdm = nimpy.pyImport("tqdm")
 
     PyNoneClass = iBuiltins.None.getattr("__class__")
 
@@ -86,3 +88,8 @@ proc tabliteConfig*(): nimpy.PyObject =
 
 proc isNone*(py: PyObject): bool {.inline.} =
     return builtins().isinstance(py, PyNoneClass).to(bool)
+
+proc tqdm*(): nimpy.PyObject =
+    importPy()
+    
+    return iTqdm
