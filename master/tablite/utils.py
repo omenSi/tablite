@@ -6,14 +6,16 @@ from time import time as now
 from pathlib import Path
 import numpy as np
 import ast
-from datetime import datetime, date, time, timedelta, timezone  # noqa
+from datetime import datetime, date, time, timedelta  # noqa
 from itertools import compress
 import string
 import random
 import xml.parsers.expat as expat
 import logging
+from tablite.config import Config
 
 letters = string.ascii_lowercase + string.digits
+NoneType = type(None)
 
 
 def generate_random_string(len):
@@ -430,27 +432,28 @@ def calc_col_count(letters: str):
 
 def calc_true_dims(sheet):
     src = sheet._get_source()
-    last_column = None
+    max_col, max_row = 0, 0
+
+    regex = re.compile("\d+")
     
     def handleStartElement(name, attrs):
-        nonlocal last_column
+        nonlocal max_col, max_row
+
         if name == "c":
-            last_column = attrs
+            last_index = attrs["r"]
+            idx, _ = next(regex.finditer(last_index)).span()
+            letters, digits = last_index[0:idx], int(last_index[idx:])
+
+            col_idx, row_idx = calc_col_count(letters), digits
+
+            max_col, max_row = max(max_col, col_idx), max(max_row, row_idx)
 
     parser = expat.ParserCreate()
     parser.buffer_text = True
     parser.StartElementHandler = handleStartElement
     parser.ParseFile(src)
 
-    last_index = last_column["r"]
-
-    regex = re.compile("\d+")
-
-    idx, _ = next(regex.finditer(last_index)).span()
-
-    letters, digits = last_index[0:idx], int(last_index[idx:])
-
-    return calc_col_count(letters), digits
+    return max_col, max_row
 
 def fixup_worksheet(worksheet):
     try:
@@ -470,3 +473,35 @@ def load_numpy(path):
     update_access_time(path)
 
     return np.load(path, allow_pickle=True, fix_imports=False)
+
+def select_type_name(dtypes: dict):
+    dtypes = [t for t in dtypes.items() if t[0] != NoneType]
+
+    if len(dtypes) == 0:
+        return "empty"
+
+    (best_type, _), *_ = sorted(dtypes, key=lambda t: t[1], reverse=True)
+
+    return best_type.__name__
+
+
+def get_predominant_types(table, all_dtypes=None):
+    if all_dtypes is None:
+        all_dtypes = table.types()
+
+    dtypes = {
+        k: select_type_name(v)
+        for k, v in all_dtypes.items()
+    }
+
+    return dtypes
+
+def py_to_nim_encoding(encoding: str) -> str:
+    if encoding is None or encoding.lower() in ["ascii", "utf8", "utf-8", "utf-8-sig"]:
+        return "ENC_UTF8"
+    elif encoding.lower() in ["utf16", "utf-16"]:
+        return "ENC_UTF16"
+    elif encoding in Config.NIM_SUPPORTED_CONV_TYPES:
+        return f"ENC_CONV|{encoding}"
+    
+    raise NotImplementedError(f"encoding not implemented: {encoding}")

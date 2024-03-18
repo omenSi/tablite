@@ -458,18 +458,16 @@ def test_filereader_book1xlsx():
 def test_filereader_exceldatesxlsx():
     path = Path(__file__).parent / "data" / "excel_dates.xlsx"
     assert path.exists()
-    try:
-        _ = Table.from_file(path, sheet=None, columns=None)
-        assert False
-    except ValueError as e:
-        assert "available sheets" in str(e)
 
-    table2 = Table.from_file(path, sheet="Sheet1", columns=None)
     sample = get_headers(path)
     columns = [k for k in sample["Sheet1"][0]]
-
+    
     table = Table.from_file(path, sheet="Sheet1", columns=columns)
+    table2 = Table.from_file(path, sheet="Sheet1", columns=None)
+    table3 = Table.from_file(path, sheet=None, columns=None)
+
     assert table == table2
+    assert table == table3
 
     table.show()
     # +===+===================+=============+==========+=====+
@@ -748,3 +746,100 @@ def test_booleans():
 
     assert len(tbl) == 1
     assert next(tbl.rows) == [False, True, False, True, False, True]
+
+
+def test_filereader_with_empties_text():
+    root_path = Path(__file__).parent / "data"
+    path = root_path / "with_empty_lines.csv"
+    assert path.exists()
+    table = Table.from_file(path, text_qualifier=None, skip_empty="NONE")
+
+    assert len(table) == 8
+    assert table.to_dict() == {
+        '': [None, 'a', None, None, '0', None, None, None],
+        '_1': [None, 'b', None, None, '1', None, None, None],
+        '_2': [None, 'c', None, None, '2', None, None, None],
+        '_3': [None, 'd', None, None, '3', None, '9', None],
+        '_4': [None, 'e', None, None, '4', None, None, None],
+        '_5': [None, 'f', None, None, '5', None, None, None]
+    }
+
+    table = Table.from_file(path, text_qualifier=None, skip_empty="ALL")
+
+    assert len(table) == 3
+    assert table.to_dict() == {
+        '':   ['a', '0', ''],
+        '_1': ['b', '1', ''],
+        '_2': ['c', '2', ''],
+        '_3': ['d', '3', '9'],
+        '_4': ['e', '4', ''],
+        '_5': ['f', '5', '']
+    }
+
+    table = Table.from_file(path, text_qualifier=None, skip_empty="ANY")
+
+    assert len(table) == 2
+    assert table.to_dict() == {
+        '':   ['a', '0'],
+        '_1': ['b', '1'],
+        '_2': ['c', '2'],
+        '_3': ['d', '3'],
+        '_4': ['e', '4'],
+        '_5': ['f', '5']
+    }
+
+
+def test_filereader_with_empties_excel():
+    root_path = Path(__file__).parent / "data"
+
+    fnames = (
+        "with_empty_lines.xlsx",
+        "with_empty_lines.ods",
+    )
+
+    for fname in fnames:
+        path = root_path / fname
+        assert path.exists()
+        table = Table.from_file(path, skip_empty="NONE", sheet="with_empty_lines")
+
+        assert len(table) == 7
+        assert table.to_dict() == {
+            '':   [None, 'a', None, None, 0, None, None],
+            '_1': [None, 'b', None, None, 1, None, None],
+            '_2': [None, 'c', None, None, 2, None, None],
+            '_3': [None, 'd', None, None, 3, None, 9],
+            '_4': [None, 'e', None, None, 4, None, None],
+            '_5': [None, 'f', None, None, 5, None, None]
+        }
+
+        table = Table.from_file(path, skip_empty="ALL", sheet="with_empty_lines")
+
+        assert len(table) == 3
+        assert table.to_dict() == {
+            '':    ['a', 0, None],
+            '_1':  ['b', 1, None],
+            '_2':  ['c', 2, None],
+            '_3':  ['d', 3, 9],
+            '_4':  ['e', 4, None],
+            '_5':  ['f', 5, None]
+        }
+
+        table = Table.from_file(path, skip_empty="ANY", sheet="with_empty_lines")
+
+        assert len(table) == 2
+        assert table.to_dict() == {
+            '':   ['a', 0],
+            '_1': ['b', 1],
+            '_2': ['c', 2],
+            '_3': ['d', 3],
+            '_4': ['e', 4],
+            '_5': ['f', 5]
+        }
+
+def test_filereader_with_escape():
+    root_path = Path(__file__).parent / "data"
+    path = root_path / "with_escape.csv"
+    assert path.exists()
+    
+    assert get_headers(path, text_qualifier="\"")["with_escape.csv"] == [["tab", "newline"], ["1", "2"]]
+    assert Table.from_file(path, text_qualifier="\"").to_dict() == {'tab': [1], 'newline': [2]}
